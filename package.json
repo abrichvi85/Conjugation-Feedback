@@ -1,0 +1,44 @@
+{
+  "name": "conjugation-feedback",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "expo": "~57.0.2",
+    "expo-constants": "~57.0.3",
+    "expo-keep-awake": "~57.0.0",
+    "expo-linking": "~57.0.1",
+    "expo-router": "~57.0.3",
+    "expo-secure-store": "~57.0.0",
+    "expo-speech": "~57.0.0",
+    "expo-sqlite": "~57.0.0",
+    "expo-status-bar": "~57.0.0",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-live-audio-stream": "^1.1.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "^4.25.2",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.1.0",
+    "@types/react": "~19.2.2",
+    "babel-preset-expo": "^57.0.1",
+    "jest": "^30.4.2",
+    "jest-expo": "~57.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "jest",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.replay.json",
+    "replay": "ts-node --project tsconfig.replay.json dev/replay.ts"
+  },
+  "private": true
+}

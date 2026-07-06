@@ -1,10 +1,12 @@
 # Fixtures
 
-Recorded WAV clips used to iterate on the grammar-checking prompt without
-speaking live. Run them through the real pipeline with:
+Recorded WAV clips used to iterate on the grammar-checking prompts without
+speaking live. One subfolder per language (`fixtures/pl/`, `fixtures/es/`).
+Run them through the real pipeline with:
 
 ```sh
-GEMINI_API_KEY=... npm run replay -- fixtures/your-clip.wav
+GEMINI_API_KEY=... npm run replay -- fixtures/pl/your-clip.wav
+GEMINI_API_KEY=... REPLAY_LANGUAGE=es npm run replay -- fixtures/es/*.wav
 ```
 
 ## Recording guidelines
@@ -15,8 +17,14 @@ GEMINI_API_KEY=... npm run replay -- fixtures/your-clip.wav
   with `ffmpeg -i in.m4a -ar 16000 -ac 1 -sample_fmt s16 out.wav`).
 - One utterance (or a short exchange) per file, with ~1 s of silence before and
   after so the VAD has context.
+- New-language checklist: a language ships only after its fixture set exists
+  and replay shows **zero false positives** on the colloquial clips. The
+  colloquial/regionalism examples must come from (or be reviewed by) a fluent
+  speaker — they are the false-positive guard.
 
-## What to cover (target ~15–20 clips)
+## What to cover (target ~15–20 clips per language)
+
+### Polish (`fixtures/pl/`)
 
 | Category | Examples | Expected verdict |
 |---|---|---|
@@ -27,6 +35,20 @@ GEMINI_API_KEY=... npm run replay -- fixtures/your-clip.wav
 | Aspect errors | "Jutro czytałem książkę." | error: aspect |
 | **Colloquial but correct** | "Kupiłem se kebaba, no i git." | **no error** (critical: false-positive guard) |
 | Fillers/fragments | "No wiesz... do sklepu." | no error |
+| Background speaker | partner's voice, distant | `speaker_is_primary: false`, no error |
+
+### Spanish (`fixtures/es/`)
+
+| Category | Examples | Expected verdict |
+|---|---|---|
+| Correct sentences | "Ayer fui al cine con mi hermana." | no error |
+| Conjugation errors | "Yo querer comprar un billete." | error: conjugation |
+| Ser/estar | "Estoy cansado de ser en casa." | error: word_choice |
+| Gender/number agreement | "La problema es complicado." | error: gender |
+| Missing subjunctive | "Quiero que vienes a la fiesta." | error: conjugation |
+| **Colloquial but correct** | "Pues nada, aquí andamos, currando." | **no error** (critical: false-positive guard) |
+| **Regional variants** | voseo: "¿Vos tenés tiempo?" | **no error** (all varieties are correct) |
+| Fillers/fragments | "Bueno, o sea... a la tienda." | no error |
 | Background speaker | partner's voice, distant | `speaker_is_primary: false`, no error |
 
 Name files `<verdict>-<slug>.wav`, e.g. `ok-colloquial-se.wav`,

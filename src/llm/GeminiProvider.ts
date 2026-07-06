@@ -1,5 +1,6 @@
+import { getLanguagePack } from '../languages/registry';
 import { base64Encode } from '../utils/base64';
-import { buildUserContextText, SYSTEM_PROMPT_PL } from './prompt';
+import { buildUserContextText } from './prompt';
 import { geminiResponseSchema, parseGrammarCheckResponse } from './schema';
 import {
   CredentialsSource,
@@ -22,7 +23,7 @@ export class GeminiProvider implements LlmProvider {
 
   async checkUtterance(wav: Uint8Array, ctx: GrammarCheckContext): Promise<GrammarCheckResult> {
     const body = {
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT_PL }] },
+      systemInstruction: { parts: [{ text: getLanguagePack(ctx.language).systemPrompt }] },
       contents: [
         {
           role: 'user',

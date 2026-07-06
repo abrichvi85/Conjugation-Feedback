@@ -10,12 +10,16 @@ import {
   View,
 } from 'react-native';
 
+import { ALL_LANGUAGES } from '@/languages/registry';
+import { LanguageCode } from '@/languages/types';
 import { createProvider } from '@/llm/providerRegistry';
+import { useSessionStore } from '@/store/useSessionStore';
 import { TtsRatePreset, settingsCredentials, useSettingsStore } from '@/store/useSettingsStore';
 import { MODEL_PRICING } from '@/utils/cost';
 
 export default function SettingsScreen() {
   const settings = useSettingsStore();
+  const sessionActive = useSessionStore((s) => s.status !== 'idle');
   const [keyDraft, setKeyDraft] = useState('');
   const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
 
@@ -102,10 +106,23 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="Language">
-        <Row label="Practice language">
-          <Text style={styles.value}>Polski 🇵🇱</Text>
-        </Row>
-        <Text style={styles.hint}>More languages coming later.</Text>
+        <View style={sessionActive ? styles.disabled : null}>
+          <SegmentedControl<LanguageCode>
+            options={ALL_LANGUAGES.map((pack) => ({
+              value: pack.code,
+              label: `${pack.flag} ${pack.displayName}`,
+            }))}
+            value={settings.language}
+            onChange={(code) => {
+              if (!sessionActive) settings.setLanguage(code);
+            }}
+          />
+        </View>
+        <Text style={styles.hint}>
+          {sessionActive
+            ? 'End the current session to switch languages.'
+            : 'Corrections and spoken feedback follow the selected language.'}
+        </Text>
       </Section>
     </ScrollView>
   );
@@ -195,7 +212,7 @@ const styles = StyleSheet.create({
   hint: { fontSize: 12, color: '#8E8E93' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowLabel: { fontSize: 15, color: '#1C1C1E', flexShrink: 1, marginRight: 12 },
-  value: { fontSize: 15, color: '#3C3C43' },
+  disabled: { opacity: 0.5 },
   segments: {
     flexDirection: 'row',
     backgroundColor: '#E5E5EA',

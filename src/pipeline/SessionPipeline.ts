@@ -3,6 +3,8 @@ import { Utterance, UtteranceSegmenter } from '../audio/UtteranceSegmenter';
 import { pcmToWav } from '../audio/wav';
 import { SqlDb } from '../db/types';
 import * as repo from '../db/repo';
+import { LanguageCode } from '../languages/types';
+import { getLanguagePack } from '../languages/registry';
 import { GrammarCheckResult, LlmError, LlmProvider } from '../llm/types';
 import { speak } from '../tts/speak';
 import { costFromUsage, estimateUtteranceCostUsd } from '../utils/cost';
@@ -38,7 +40,7 @@ export interface PipelineCallbacks {
 export interface PipelineSettings {
   verbalFeedback: boolean;
   ttsRate: number;
-  language: 'pl';
+  language: LanguageCode;
   model: string;
 }
 
@@ -157,7 +159,7 @@ export class SessionPipeline {
       }
 
       if (result.hasError && result.feedbackUtterance && settings.verbalFeedback && this.running) {
-        await this.speakFeedback(result.feedbackUtterance, settings.ttsRate);
+        await this.speakFeedback(result.feedbackUtterance, settings.ttsRate, settings.language);
       }
     } catch (err) {
       repo.markUtteranceStatus(this.db, utteranceId, 'error');
@@ -188,11 +190,11 @@ export class SessionPipeline {
   }
 
   /** Gate the mic while TTS speaks so the app never corrects its own voice. */
-  private async speakFeedback(text: string, rate: number): Promise<void> {
+  private async speakFeedback(text: string, rate: number, language: LanguageCode): Promise<void> {
     this.segmenter.setGated(true);
     this.callbacks.onStatus('speaking');
     try {
-      await speak(text, { language: 'pl-PL', rate });
+      await speak(text, { language: getLanguagePack(language).ttsLocale, rate });
       await delay(TTS_GATE_TAIL_MS);
     } finally {
       this.segmenter.setGated(false);

@@ -1,3 +1,4 @@
+import { getLanguagePack } from '@/languages/registry';
 import { GeminiProvider } from '@/llm/GeminiProvider';
 import { LlmError } from '@/llm/types';
 
@@ -14,7 +15,7 @@ const WIRE_OK = {
     },
   ],
   corrected_sentence: 'Ja chcę kupić bilet.',
-  feedback_utterance_pl: 'Mówi się: chcę kupić.',
+  feedback_utterance: 'Mówi się: chcę kupić.',
 };
 
 function geminiResponse(text: string, usage?: object) {
@@ -62,6 +63,17 @@ describe('GeminiProvider', () => {
     const body = JSON.parse(init.body);
     expect(body.generationConfig.responseMimeType).toBe('application/json');
     expect(body.contents[0].parts[1].inlineData.mimeType).toBe('audio/wav');
+  });
+
+  it('sends the system prompt for the requested language', async () => {
+    mockFetchOnce(200, geminiResponse(JSON.stringify(WIRE_OK)));
+    const provider = new GeminiProvider(CREDS, 'gemini-3.1-flash-lite');
+    await provider.checkUtterance(WAV, { language: 'es', recentTranscripts: [] });
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.systemInstruction.parts[0].text).toBe(getLanguagePack('es').systemPrompt);
+    expect(body.systemInstruction.parts[0].text).toContain('Spanish grammar coach');
   });
 
   it('retries once on malformed JSON, then succeeds', async () => {

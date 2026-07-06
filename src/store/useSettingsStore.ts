@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
+import { LanguageCode } from '../languages/types';
 import { DEFAULT_MODEL } from '../utils/cost';
 
 const SECURE_KEY_API = 'gemini_api_key';
@@ -19,18 +20,20 @@ interface SettingsState {
   hydrated: boolean;
   apiKey: string | null;
   verbalFeedback: boolean;
-  language: 'pl';
+  language: LanguageCode;
   model: string;
   ttsRate: TtsRatePreset;
   hydrate: () => Promise<void>;
   setApiKey: (key: string | null) => Promise<void>;
   setVerbalFeedback: (on: boolean) => void;
+  setLanguage: (language: LanguageCode) => void;
   setModel: (model: string) => void;
   setTtsRate: (rate: TtsRatePreset) => void;
 }
 
 interface PersistedPrefs {
   verbalFeedback: boolean;
+  language: LanguageCode;
   model: string;
   ttsRate: TtsRatePreset;
 }
@@ -38,6 +41,7 @@ interface PersistedPrefs {
 async function persistPrefs(state: SettingsState): Promise<void> {
   const prefs: PersistedPrefs = {
     verbalFeedback: state.verbalFeedback,
+    language: state.language,
     model: state.model,
     ttsRate: state.ttsRate,
   };
@@ -70,6 +74,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       hydrated: true,
       apiKey: apiKey ?? null,
       verbalFeedback: prefs.verbalFeedback ?? true,
+      language: prefs.language ?? 'pl',
       model: prefs.model ?? DEFAULT_MODEL,
       ttsRate: prefs.ttsRate ?? 'normal',
     });
@@ -86,6 +91,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setVerbalFeedback: (on) => {
     set({ verbalFeedback: on });
+    void persistPrefs(get());
+  },
+
+  setLanguage: (language) => {
+    set({ language });
     void persistPrefs(get());
   },
 

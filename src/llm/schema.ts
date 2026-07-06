@@ -18,7 +18,7 @@ export const grammarCheckWireSchema = z.object({
     })
   ),
   corrected_sentence: z.string(),
-  feedback_utterance_pl: z.string(),
+  feedback_utterance: z.string(),
 });
 
 export type GrammarCheckWire = z.infer<typeof grammarCheckWireSchema>;
@@ -54,7 +54,7 @@ export function fromWire(wire: GrammarCheckWire): GrammarCheckResult {
     hasError,
     errors: hasError ? errors : [],
     correctedSentence: wire.corrected_sentence,
-    feedbackUtterance: wire.feedback_utterance_pl,
+    feedbackUtterance: wire.feedback_utterance,
   };
 }
 
@@ -79,7 +79,7 @@ export const geminiResponseSchema = {
       },
     },
     corrected_sentence: { type: 'STRING' },
-    feedback_utterance_pl: { type: 'STRING' },
+    feedback_utterance: { type: 'STRING' },
   },
   required: [
     'transcript',
@@ -87,7 +87,7 @@ export const geminiResponseSchema = {
     'has_error',
     'errors',
     'corrected_sentence',
-    'feedback_utterance_pl',
+    'feedback_utterance',
   ],
   propertyOrdering: [
     'transcript',
@@ -95,6 +95,6 @@ export const geminiResponseSchema = {
     'has_error',
     'errors',
     'corrected_sentence',
-    'feedback_utterance_pl',
+    'feedback_utterance',
   ],
 } as const;

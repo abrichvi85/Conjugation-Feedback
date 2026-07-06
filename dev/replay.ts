@@ -3,8 +3,9 @@
  * segmenter + GeminiProvider and print the JSON verdicts.
  *
  * Usage:
- *   GEMINI_API_KEY=... npm run replay -- fixtures/blad-koniugacja.wav [more.wav]
- *   GEMINI_API_KEY=... GEMINI_MODEL=gemini-2.5-flash-lite npm run replay -- fixtures/*.wav
+ *   GEMINI_API_KEY=... npm run replay -- fixtures/pl/blad-koniugacja.wav [more.wav]
+ *   GEMINI_API_KEY=... REPLAY_LANGUAGE=es npm run replay -- fixtures/es/*.wav
+ *   GEMINI_API_KEY=... GEMINI_MODEL=gemini-2.5-flash-lite npm run replay -- fixtures/pl/*.wav
  *
  * Record fixtures as 16 kHz (or any rate — they are fed as-is) 16-bit PCM WAV,
  * ideally through actual AirPods so mic coloration matches production.
@@ -13,6 +14,8 @@ import * as fs from 'fs';
 
 import { UtteranceSegmenter } from '../src/audio/UtteranceSegmenter';
 import { pcmToWav, wavToPcm } from '../src/audio/wav';
+import { LANGUAGE_PACKS } from '../src/languages/registry';
+import { LanguageCode } from '../src/languages/types';
 import { GeminiProvider } from '../src/llm/GeminiProvider';
 import { GrammarCheckResult } from '../src/llm/types';
 import { DEFAULT_MODEL } from '../src/utils/cost';
@@ -31,6 +34,14 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const model = process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
+  const language = (process.env.REPLAY_LANGUAGE ?? 'pl') as LanguageCode;
+  if (!LANGUAGE_PACKS[language]) {
+    console.error(
+      `Unknown REPLAY_LANGUAGE "${language}". Available: ${Object.keys(LANGUAGE_PACKS).join(', ')}`
+    );
+    process.exit(1);
+  }
+  console.log(`Language: ${language} · Model: ${model}`);
   const provider = new GeminiProvider({ getApiKey: async () => apiKey }, model);
 
   const recentTranscripts: string[] = [];
@@ -57,7 +68,7 @@ async function main(): Promise<void> {
       const started = Date.now();
       let result: GrammarCheckResult;
       try {
-        result = await provider.checkUtterance(wav, { language: 'pl', recentTranscripts });
+        result = await provider.checkUtterance(wav, { language, recentTranscripts });
       } catch (err) {
         console.error(`  segment ${i}: FAILED —`, err);
         continue;

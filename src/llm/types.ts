@@ -1,3 +1,5 @@
+import { LanguageCode } from '../languages/types';
+
 export type ErrorType = 'conjugation' | 'case' | 'gender' | 'aspect' | 'word_choice' | 'other';
 
 export interface GrammarError {
@@ -20,7 +22,7 @@ export interface GrammarCheckResult {
 }
 
 export interface GrammarCheckContext {
-  language: 'pl';
+  language: LanguageCode;
   /** Last few transcripts from this session, for gender/pronoun continuity. */
   recentTranscripts: string[];
 }

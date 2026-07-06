@@ -13,7 +13,7 @@ const VALID = {
     },
   ],
   corrected_sentence: 'Szukam mojego telefonu.',
-  feedback_utterance_pl: 'Mówi się: szukam mojego telefonu.',
+  feedback_utterance: 'Mówi się: szukam mojego telefonu.',
 };
 
 describe('parseGrammarCheckResponse', () => {

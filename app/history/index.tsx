@@ -4,6 +4,8 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { getDatabase } from '@/db/database';
 import { SessionRow, listSessions } from '@/db/repo';
+import { LANGUAGE_PACKS } from '@/languages/registry';
+import { LanguageCode } from '@/languages/types';
 import { formatUsd } from '@/utils/cost';
 
 export default function HistoryScreen() {
@@ -37,6 +39,7 @@ function SessionListItem({ session }: { session: SessionRow }) {
       <View style={styles.row}>
         <View style={styles.rowMain}>
           <Text style={styles.title}>
+            {LANGUAGE_PACKS[session.language as LanguageCode]?.flag ?? ''}{' '}
             {date.toLocaleDateString()}{' '}
             {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>

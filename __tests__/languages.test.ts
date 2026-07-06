@@ -36,6 +36,7 @@ describe('language packs', () => {
   it('getLanguagePack returns the right pack and throws on unknown codes', () => {
     expect(getLanguagePack('pl').ttsLocale).toBe('pl-PL');
     expect(getLanguagePack('es').ttsLocale).toBe('es-ES');
+    expect(getLanguagePack('fr').ttsLocale).toBe('fr-FR');
     expect(() => getLanguagePack('xx' as LanguageCode)).toThrow('Unknown language');
   });
 });

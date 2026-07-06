@@ -51,6 +51,20 @@ GEMINI_API_KEY=... REPLAY_LANGUAGE=es npm run replay -- fixtures/es/*.wav
 | Fillers/fragments | "Bueno, o sea... a la tienda." | no error |
 | Background speaker | partner's voice, distant | `speaker_is_primary: false`, no error |
 
+### French (`fixtures/fr/`)
+
+| Category | Examples | Expected verdict |
+|---|---|---|
+| Correct sentences | "Hier, je suis allé au cinéma." | no error |
+| Conjugation errors | "Je vouloir acheter un billet." | error: conjugation |
+| Passé composé auxiliary | "J'ai allé au cinéma." | error: conjugation |
+| Gender/article agreement | "Le voiture est rapide." | error: gender |
+| Missing subjunctive | "Il faut que tu viens." | error: conjugation |
+| **Colloquial but correct** | "Bah j'sais pas, c'est pas grave quoi." | **no error** (dropped "ne" is correct spoken French) |
+| **Regional variants** | "Ça coûte septante euros." | **no error** (Belgian/Swiss/Quebec French is correct) |
+| Fillers/fragments | "Ben... au magasin, du coup." | no error |
+| Background speaker | partner's voice, distant | `speaker_is_primary: false`, no error |
+
 Name files `<verdict>-<slug>.wav`, e.g. `ok-colloquial-se.wav`,
 `err-case-szukam.wav`, `ignore-background-partner.wav`.
 

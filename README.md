@@ -7,8 +7,10 @@ correction and a short explanation — and, when the verbal-feedback toggle is o
 (default), immediately speaks the correction into your AirPods:
 *„Mówi się: szukam mojego telefonu."*
 
-Polish first; the architecture keeps other languages, other LLM providers, and
-a future backend/OAuth path open.
+Polish, Spanish, French, and English are supported (pick in Settings); the
+architecture keeps more languages, other LLM providers, and a future
+backend/OAuth path open. Runs on iOS and Android, with background listening on
+both (iOS background audio; Android foreground service).
 
 ## How it works
 
@@ -35,6 +37,10 @@ Key design decisions:
   `src/llm/types.ts` is where a ChatGPT-OAuth or backend-proxy provider plugs
   in later without rearchitecting.
 - **No raw audio is stored.** Only transcripts and corrections go to SQLite.
+- **Background capture** via `@siteed/audio-studio`: real-time PCM streaming
+  plus an Android foreground service (persistent notification) and an iOS
+  background audio session, so a session survives the screen locking. All of
+  it is isolated behind `src/audio/AudioCapture.ts`.
 
 ## Repo layout
 
@@ -45,48 +51,32 @@ src/llm/             provider interface, GeminiProvider, prompt, response schema
 src/pipeline/        SessionPipeline — orchestrates capture → check → speak → persist
 src/db/              expo-sqlite schema/migrations/repo (node-testable)
 src/store/           zustand stores (session state, settings)
+src/languages/       per-language packs (prompt, TTS locale) + registry
 src/tts/             expo-speech wrapper with the TTS mic-gate
 dev/replay.ts        replay WAV fixtures through the real pipeline (prompt tuning)
 fixtures/            recorded test clips + guidelines (see fixtures/README.md)
-plugins/             config plugin guarding the AVAudioSession Bluetooth setup
 ```
 
 ## Development
 
 ```sh
 npm install --legacy-peer-deps
-npm test            # 40 unit tests: VAD, segmenter, WAV, schema, provider, repo, cost
+npm test            # 47 unit tests: VAD, segmenter, WAV, schema, provider, repo, cost, language packs
 npm run typecheck
 ```
 
 ### Running on a device (required for real testing)
 
-Continuous background mic capture needs a **development build** — Expo Go will
-not work. A Mac is *not* required if you use EAS cloud builds; you only need an
-[expo.dev](https://expo.dev) account and an Apple Developer account:
-
-```sh
-npx eas-cli login
-npx eas-cli build --profile development --platform ios   # install on your iPhone
-npx expo start --dev-client
-```
-
-Then on the phone: Settings tab → paste your Gemini API key (from
-[aistudio.google.com](https://aistudio.google.com)) → Test key → Session tab →
-put in AirPods → Start session.
-
-**On-device checks that matter most** (can't be covered by unit tests):
-1. Start a session, lock the phone, keep talking — the utterance counter must
-   keep climbing (`UIBackgroundModes: audio`).
-2. Trigger a correction — TTS must play in the AirPods while the mic stays
-   live afterward (AVAudioSession `playAndRecord` + Bluetooth).
-3. Phone call / AirPods disconnect mid-session — the session should fail soft
-   (stop/restart is acceptable at this stage).
+Continuous background mic capture needs a **dev/standalone build** (not Expo
+Go). A Mac is *not* required — builds run in the EAS cloud, and Android needs no
+Apple account. See **[BUILD.md](./BUILD.md)** for the full iOS + Android build
+steps and the on-device verification checklist (background capture on lock
+screen, AirPods duplex, logging).
 
 ### Tuning the grammar checker
 
-The prompt in `src/llm/prompt.ts` is the highest-iteration file in the repo.
-Record fixture WAVs (see `fixtures/README.md`), then:
+The per-language prompts in `src/languages/` are the highest-iteration files in
+the repo. Record fixture WAVs (see `fixtures/README.md`), then:
 
 ```sh
 GEMINI_API_KEY=... npm run replay -- fixtures/*.wav

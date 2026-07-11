@@ -1,51 +1,77 @@
-import LiveAudioStream from 'react-native-live-audio-stream';
+import { AudioStudioModule } from '@siteed/audio-studio';
+import { LegacyEventEmitter, type EventSubscription } from 'expo-modules-core';
 
 import { base64Decode } from '../utils/base64';
 
 export const SAMPLE_RATE = 16000;
 /** 32 ms at 16 kHz — the fixed frame size the VAD expects. */
 export const FRAME_SAMPLES = 512;
+/** How often the native recorder emits a PCM chunk. */
+const EMIT_INTERVAL_MS = 32;
+
+// Mirror the library's own event wiring: it exposes recording data through a
+// LegacyEventEmitter('AudioData') on the native module. We drive the recorder
+// imperatively (outside React) because the SessionPipeline owns it.
+const emitter = new LegacyEventEmitter(AudioStudioModule);
 
 /**
- * Wraps react-native-live-audio-stream: starts continuous 16 kHz mono 16-bit
- * capture and rebuffers the variable-size native chunks into fixed
- * FRAME_SAMPLES frames for the segmenter.
+ * Continuous 16 kHz mono 16-bit capture via @siteed/audio-studio, which also
+ * runs the Android foreground service (configured in app.json) so a session
+ * survives the screen locking, and keeps the iOS audio session alive for
+ * AirPods. Variable-size native chunks are rebuffered into fixed FRAME_SAMPLES
+ * frames for the segmenter.
  */
 export class AudioCapture {
   private running = false;
-  private initialized = false;
+  private subscription: EventSubscription | null = null;
   private remainder: Int16Array = new Int16Array(0);
   private onFrame: (frame: Int16Array) => void = () => {};
 
   start(onFrame: (frame: Int16Array) => void): void {
     this.onFrame = onFrame;
     this.remainder = new Int16Array(0);
-
-    if (!this.initialized) {
-      LiveAudioStream.init({
-        sampleRate: SAMPLE_RATE,
-        channels: 1,
-        bitsPerSample: 16,
-        audioSource: 6, // Android VOICE_RECOGNITION; ignored on iOS
-        bufferSize: FRAME_SAMPLES * 2 * 4,
-        wavFile: '', // unused: we consume the raw stream
-      });
-      LiveAudioStream.on('data', (chunkBase64: string) => this.handleChunk(chunkBase64));
-      this.initialized = true;
-    }
-
     this.running = true;
-    LiveAudioStream.start();
+
+    this.subscription = emitter.addListener('AudioData', (event: { encoded?: string }) => {
+      if (!this.running || !event?.encoded) return;
+      this.handleChunk(event.encoded);
+    });
+
+    // No raw/compressed files (privacy + disk) — streaming only. The
+    // notification + background audio focus keep capture alive in the pocket.
+    void AudioStudioModule.startRecording({
+      sampleRate: SAMPLE_RATE,
+      channels: 1,
+      encoding: 'pcm_16bit',
+      interval: EMIT_INTERVAL_MS,
+      keepAwake: true,
+      showNotification: true,
+      enableProcessing: false,
+      autoResumeAfterInterruption: true,
+      output: { primary: { enabled: false }, compressed: { enabled: false } },
+      android: { audioFocusStrategy: 'background' },
+      notification: {
+        title: 'Conjugation Feedback',
+        text: 'Listening for corrections…',
+        android: {
+          channelId: 'listening-session',
+          channelName: 'Listening session',
+          priority: 'low',
+          showPauseResumeActions: false,
+        },
+      },
+    });
   }
 
   stop(): void {
     if (!this.running) return;
     this.running = false;
-    LiveAudioStream.stop();
+    this.subscription?.remove();
+    this.subscription = null;
+    void AudioStudioModule.stopRecording();
   }
 
   private handleChunk(chunkBase64: string): void {
-    if (!this.running) return;
     const bytes = base64Decode(chunkBase64);
     const samples = new Int16Array(bytes.buffer, bytes.byteOffset, Math.floor(bytes.length / 2));
 

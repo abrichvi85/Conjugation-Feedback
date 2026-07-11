@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { ensureCapturePermissions } from '../audio/permissions';
 import { getDatabase } from '../db/database';
 import { createProvider } from '../llm/providerRegistry';
 import {
@@ -20,7 +21,7 @@ interface SessionState {
   aggregates: SessionAggregates;
   transientError: string | null;
   fatalError: string | null;
-  startSession: () => void;
+  startSession: () => Promise<void>;
   stopSession: () => void;
 }
 
@@ -42,13 +43,27 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   transientError: null,
   fatalError: null,
 
-  startSession: () => {
+  startSession: async () => {
     if (get().status !== 'idle') return;
     const settings = useSettingsStore.getState();
     if (!settings.apiKey) {
       set({ fatalError: 'Add your Gemini API key in Settings first.' });
       return;
     }
+
+    // Mark as starting so a double-tap can't launch two sessions while the
+    // async permission prompt is open.
+    set({ status: 'listening', fatalError: null, transientError: null });
+    const granted = await ensureCapturePermissions();
+    if (!granted) {
+      set({
+        status: 'idle',
+        fatalError: 'Microphone permission is required to run a session.',
+      });
+      return;
+    }
+    // A stop or another start may have raced the permission prompt.
+    if (get().status !== 'listening' || pipeline) return;
 
     const provider = createProvider('gemini', settingsCredentials, settings.model);
     pipeline = new SessionPipeline(

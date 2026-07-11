@@ -1,4 +1,4 @@
-export type LanguageCode = 'pl' | 'es' | 'fr';
+export type LanguageCode = 'pl' | 'es' | 'fr' | 'en';
 
 /**
  * Everything that is specific to one target language. Adding a language =

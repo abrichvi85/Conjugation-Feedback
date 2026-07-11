@@ -37,6 +37,7 @@ describe('language packs', () => {
     expect(getLanguagePack('pl').ttsLocale).toBe('pl-PL');
     expect(getLanguagePack('es').ttsLocale).toBe('es-ES');
     expect(getLanguagePack('fr').ttsLocale).toBe('fr-FR');
+    expect(getLanguagePack('en').ttsLocale).toBe('en-US');
     expect(() => getLanguagePack('xx' as LanguageCode)).toThrow('Unknown language');
   });
 });

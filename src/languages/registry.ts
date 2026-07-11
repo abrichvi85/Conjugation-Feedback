@@ -1,3 +1,4 @@
+import { english } from './en';
 import { spanish } from './es';
 import { french } from './fr';
 import { polish } from './pl';
@@ -7,6 +8,7 @@ export const LANGUAGE_PACKS: Record<LanguageCode, LanguagePack> = {
   pl: polish,
   es: spanish,
   fr: french,
+  en: english,
 };
 
 export const ALL_LANGUAGES: LanguagePack[] = Object.values(LANGUAGE_PACKS);

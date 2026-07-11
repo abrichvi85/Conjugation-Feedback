@@ -65,6 +65,20 @@ GEMINI_API_KEY=... REPLAY_LANGUAGE=es npm run replay -- fixtures/es/*.wav
 | Fillers/fragments | "Ben... au magasin, du coup." | no error |
 | Background speaker | partner's voice, distant | `speaker_is_primary: false`, no error |
 
+### English (`fixtures/en/`)
+
+| Category | Examples | Expected verdict |
+|---|---|---|
+| Correct sentences | "Yesterday I went to the cinema." | no error |
+| Subject-verb agreement | "She have three brothers." | error: conjugation |
+| Articles | "I went to shop to buy milk." | error: other |
+| Tense | "Yesterday I go to work." | error: aspect |
+| Third-person -s | "He work in a bank." | error: conjugation |
+| **Colloquial but correct** | "Gonna grab a coffee, you know?" | **no error** (contractions/fillers are correct speech) |
+| **Regional varieties** | "I've got heaps of work on." | **no error** (all varieties are correct) |
+| Fillers/fragments | "Well... to the shop, I mean." | no error |
+| Background speaker | partner's voice, distant | `speaker_is_primary: false`, no error |
+
 Name files `<verdict>-<slug>.wav`, e.g. `ok-colloquial-se.wav`,
 `err-case-szukam.wav`, `ignore-background-partner.wav`.
 

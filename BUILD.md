@@ -31,6 +31,9 @@ you need to test walking around with AirPods and the screen locked.
 
 ## iOS (standalone, for your iPhone)
 
+> First time shipping to an iPhone? **[DEPLOY-IOS.md](./DEPLOY-IOS.md)** is the
+> detailed walkthrough with signing, install, and troubleshooting.
+
 ```sh
 eas device:create         # register your iPhone's UDID (follow the on-device profile prompt)
 eas build --profile preview --platform ios

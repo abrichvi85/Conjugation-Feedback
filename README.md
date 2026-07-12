@@ -70,8 +70,9 @@ npm run typecheck
 Continuous background mic capture needs a **dev/standalone build** (not Expo
 Go). A Mac is *not* required — builds run in the EAS cloud, and Android needs no
 Apple account. See **[BUILD.md](./BUILD.md)** for the full iOS + Android build
-steps and the on-device verification checklist (background capture on lock
-screen, AirPods duplex, logging).
+steps and the on-device verification checklist, and
+**[DEPLOY-IOS.md](./DEPLOY-IOS.md)** for the step-by-step iPhone walkthrough
+(signing, install, troubleshooting).
 
 ### Tuning the grammar checker
 

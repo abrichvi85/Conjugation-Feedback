@@ -66,7 +66,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (get().status !== 'listening' || pipeline) return;
 
     const provider = createProvider('gemini', settingsCredentials, settings.model);
-    pipeline = new SessionPipeline(
+    let candidate: SessionPipeline;
+    const isCurrent = () => pipeline === candidate;
+    candidate = new SessionPipeline(
       getDatabase(),
       provider,
       () => {
@@ -79,25 +81,51 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         };
       },
       {
-        onStatus: (status) => set({ status }),
-        onFeedItem: (item) => set((state) => ({ feed: [item, ...state.feed].slice(0, 50) })),
-        onAggregates: (aggregates) => set({ aggregates }),
-        onTransientError: (transientError) => set({ transientError }),
-        onFatalError: (fatalError) =>
-          set({ fatalError, status: 'idle', sessionId: null, startedAt: null }),
+        onStatus: (status) => {
+          if (isCurrent()) set({ status });
+        },
+        onFeedItem: (item) => {
+          if (isCurrent()) {
+            set((state) => ({ feed: [item, ...state.feed].slice(0, 50) }));
+          }
+        },
+        onAggregates: (aggregates) => {
+          if (isCurrent()) set({ aggregates });
+        },
+        onTransientError: (transientError) => {
+          if (isCurrent()) set({ transientError });
+        },
+        onFatalError: (fatalError) => {
+          if (!isCurrent()) return;
+          pipeline = null;
+          set({ fatalError, status: 'idle', sessionId: null, startedAt: null });
+        },
       }
     );
+    pipeline = candidate;
 
-    const sessionId = pipeline.start();
-    set({
-      status: 'listening',
-      sessionId,
-      startedAt: Date.now(),
-      feed: [],
-      aggregates: EMPTY_AGGREGATES,
-      transientError: null,
-      fatalError: null,
-    });
+    try {
+      const sessionId = await candidate.start();
+      if (!isCurrent()) return;
+      set({
+        status: 'listening',
+        sessionId,
+        startedAt: Date.now(),
+        feed: [],
+        aggregates: EMPTY_AGGREGATES,
+        transientError: null,
+        fatalError: null,
+      });
+    } catch {
+      if (!isCurrent()) return;
+      pipeline = null;
+      set({
+        status: 'idle',
+        sessionId: null,
+        startedAt: null,
+        fatalError: 'Audio capture could not start. Check microphone access and try again.',
+      });
+    }
   },
 
   stopSession: () => {

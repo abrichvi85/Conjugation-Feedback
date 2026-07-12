@@ -1,6 +1,6 @@
 import { Link, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getDatabase } from '@/db/database';
 import { SessionRow, listSessions } from '@/db/repo';
@@ -35,8 +35,11 @@ function SessionListItem({ session }: { session: SessionRow }) {
       ? Math.max(1, Math.round((session.ended_at - session.started_at) / 60000))
       : null;
   return (
-    <Link href={{ pathname: '/history/[sessionId]', params: { sessionId: String(session.id) } }}>
-      <View style={styles.row}>
+    <Link
+      href={{ pathname: '/history/[sessionId]', params: { sessionId: String(session.id) } }}
+      asChild
+    >
+      <Pressable style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
         <View style={styles.rowMain}>
           <Text style={styles.title}>
             {LANGUAGE_PACKS[session.language as LanguageCode]?.flag ?? ''}{' '}
@@ -51,7 +54,7 @@ function SessionListItem({ session }: { session: SessionRow }) {
         <Text style={[styles.count, session.error_count > 0 ? styles.countBad : styles.countOk]}>
           {session.error_count}
         </Text>
-      </View>
+      </Pressable>
     </Link>
   );
 }
@@ -70,6 +73,7 @@ const styles = StyleSheet.create({
     maxWidth: 500,
   },
   rowMain: { flex: 1 },
+  rowPressed: { opacity: 0.65 },
   title: { fontSize: 15, fontWeight: '600', color: '#1C1C1E' },
   subtitle: { fontSize: 13, color: '#8E8E93', marginTop: 2 },
   count: { fontSize: 18, fontWeight: '700', marginLeft: 12 },

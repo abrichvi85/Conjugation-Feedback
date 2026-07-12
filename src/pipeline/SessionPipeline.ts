@@ -77,15 +77,24 @@ export class SessionPipeline {
     return this.sessionId;
   }
 
-  start(): number {
+  async start(): Promise<number> {
     const settings = this.getSettings();
     this.sessionId = repo.createSession(this.db, Date.now(), settings.language, settings.model);
     this.running = true;
     this.aggregates = { utteranceCount: 0, errorCount: 0, audioSeconds: 0, estCostUsd: 0 };
     this.recentTranscripts = [];
-    this.capture.start((frame) => this.segmenter.pushFrame(frame));
-    this.callbacks.onStatus('listening');
-    return this.sessionId;
+    try {
+      await this.capture.start((frame) => this.segmenter.pushFrame(frame));
+      this.callbacks.onStatus('listening');
+      return this.sessionId;
+    } catch (error) {
+      this.running = false;
+      if (this.sessionId != null) {
+        repo.endSession(this.db, this.sessionId, Date.now());
+      }
+      this.sessionId = null;
+      throw error;
+    }
   }
 
   stop(): void {

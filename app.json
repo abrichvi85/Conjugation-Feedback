@@ -50,7 +50,9 @@
           "enablePhoneStateHandling": true,
           "iosBackgroundModes": {
             "useAudio": true,
-            "useProcessing": true,
+            "useProcessing": true
+          },
+          "iosConfig": {
             "microphoneUsageDescription": "Conjugation Feedback listens to your speech during practice sessions to detect grammar mistakes and give you corrections."
           }
         }

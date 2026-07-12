@@ -23,11 +23,13 @@ const emitter = new LegacyEventEmitter(AudioStudioModule);
  */
 export class AudioCapture {
   private running = false;
+  private generation = 0;
   private subscription: EventSubscription | null = null;
   private remainder: Int16Array = new Int16Array(0);
   private onFrame: (frame: Int16Array) => void = () => {};
 
-  start(onFrame: (frame: Int16Array) => void): void {
+  async start(onFrame: (frame: Int16Array) => void): Promise<void> {
+    const generation = ++this.generation;
     this.onFrame = onFrame;
     this.remainder = new Int16Array(0);
     this.running = true;
@@ -37,38 +39,54 @@ export class AudioCapture {
       this.handleChunk(event.encoded);
     });
 
-    // No raw/compressed files (privacy + disk) — streaming only. The
-    // notification + background audio focus keep capture alive in the pocket.
-    void AudioStudioModule.startRecording({
-      sampleRate: SAMPLE_RATE,
-      channels: 1,
-      encoding: 'pcm_16bit',
-      interval: EMIT_INTERVAL_MS,
-      keepAwake: true,
-      showNotification: true,
-      enableProcessing: false,
-      autoResumeAfterInterruption: true,
-      output: { primary: { enabled: false }, compressed: { enabled: false } },
-      android: { audioFocusStrategy: 'background' },
-      notification: {
-        title: 'Conjugation Feedback',
-        text: 'Listening for corrections…',
-        android: {
-          channelId: 'listening-session',
-          channelName: 'Listening session',
-          priority: 'low',
-          showPauseResumeActions: false,
+    try {
+      // No raw/compressed files (privacy + disk) — streaming only. The
+      // notification + background audio focus keep capture alive in the pocket.
+      await AudioStudioModule.startRecording({
+        sampleRate: SAMPLE_RATE,
+        channels: 1,
+        encoding: 'pcm_16bit',
+        interval: EMIT_INTERVAL_MS,
+        keepAwake: true,
+        showNotification: true,
+        enableProcessing: false,
+        autoResumeAfterInterruption: true,
+        output: { primary: { enabled: false }, compressed: { enabled: false } },
+        audioFocusStrategy: 'background',
+        notification: {
+          title: 'Conjugation Feedback',
+          text: 'Listening for corrections…',
+          android: {
+            channelId: 'listening-session',
+            channelName: 'Listening session',
+            priority: 'low',
+            showPauseResumeActions: false,
+          },
         },
-      },
-    });
+      });
+      if (!this.running || this.generation !== generation) {
+        await AudioStudioModule.stopRecording().catch(() => undefined);
+        throw new Error('Audio capture start was cancelled');
+      }
+    } catch (error) {
+      if (this.generation === generation) {
+        this.running = false;
+        this.subscription?.remove();
+        this.subscription = null;
+      }
+      throw error;
+    }
   }
 
   stop(): void {
     if (!this.running) return;
+    this.generation++;
     this.running = false;
     this.subscription?.remove();
     this.subscription = null;
-    void AudioStudioModule.stopRecording();
+    void AudioStudioModule.stopRecording().catch(() => {
+      // The native recorder can already be stopped after an interruption.
+    });
   }
 
   private handleChunk(chunkBase64: string): void {

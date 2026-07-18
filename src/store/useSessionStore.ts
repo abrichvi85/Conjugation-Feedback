@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { ensureCapturePermissions } from '../audio/permissions';
 import { getDatabase } from '../db/database';
+import { speak } from '../tts/speak';
 import { createProvider } from '../llm/providerRegistry';
 import {
   FeedItem,
@@ -72,10 +73,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       () => {
         const s = useSettingsStore.getState();
         return {
-          verbalFeedback: s.verbalFeedback,
+          feedbackMode: s.feedbackMode,
           ttsRate: TTS_RATES[s.ttsRate],
           language: s.language,
           model: s.model,
+          profile: { gender: s.gender, level: s.level },
         };
       },
       {
@@ -101,8 +103,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   stopSession: () => {
+    const aggregates = pipeline?.getAggregates();
     pipeline?.stop();
     pipeline = null;
     set({ status: 'idle', sessionId: null, startedAt: null, transientError: null });
+
+    // Spoken end-of-session summary (English — the coaching voice, not the
+    // practice language). Positive reinforcement is part of the loop.
+    const settings = useSettingsStore.getState();
+    if (settings.feedbackMode === 'voice' && aggregates && aggregates.utteranceCount > 0) {
+      const minutes = Math.max(1, Math.round(aggregates.audioSeconds / 60));
+      const mistakes =
+        aggregates.errorCount === 0
+          ? 'no mistakes — great job'
+          : aggregates.errorCount === 1
+            ? '1 mistake to review'
+            : `${aggregates.errorCount} mistakes to review`;
+      void speak(
+        `Session done. About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} of speaking, ${mistakes}.`,
+        { language: 'en-US', rate: TTS_RATES[settings.ttsRate] }
+      );
+    }
   },
 }));

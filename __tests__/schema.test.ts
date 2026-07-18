@@ -12,6 +12,13 @@ const VALID = {
       explanation_short: "'Szukać' takes the genitive case.",
     },
   ],
+  vocabulary_gaps: [
+    {
+      native_fragment: 'no i ten... deadline',
+      intended_meaning: 'deadline',
+      target_suggestion: 'termin',
+    },
+  ],
   corrected_sentence: 'Szukam mojego telefonu.',
   feedback_utterance: 'Mówi się: szukam mojego telefonu.',
 };
@@ -27,6 +34,20 @@ describe('parseGrammarCheckResponse', () => {
       explanationShort: "'Szukać' takes the genitive case.",
     });
     expect(result.feedbackUtterance).toBe('Mówi się: szukam mojego telefonu.');
+    expect(result.vocabularyGaps).toEqual([
+      { nativeFragment: 'no i ten... deadline', intendedMeaning: 'deadline', targetSuggestion: 'termin' },
+    ]);
+  });
+
+  it('tolerates a missing vocabulary_gaps field (older responses)', () => {
+    const { vocabulary_gaps: _gone, ...withoutGaps } = VALID;
+    const result = parseGrammarCheckResponse(JSON.stringify(withoutGaps));
+    expect(result.vocabularyGaps).toEqual([]);
+  });
+
+  it('suppresses vocabulary gaps from a non-primary speaker', () => {
+    const wire = { ...VALID, speaker_is_primary: false };
+    expect(parseGrammarCheckResponse(JSON.stringify(wire)).vocabularyGaps).toEqual([]);
   });
 
   it('tolerates markdown code fences', () => {

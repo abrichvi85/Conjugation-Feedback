@@ -5,9 +5,11 @@ import { SqlDb } from '../db/types';
 import * as repo from '../db/repo';
 import { LanguageCode } from '../languages/types';
 import { getLanguagePack } from '../languages/registry';
-import { GrammarCheckResult, LlmError, LlmProvider } from '../llm/types';
-import { speak } from '../tts/speak';
+import { GrammarCheckResult, LlmError, LlmProvider, SpeakerProfile } from '../llm/types';
+import { playCorrectionChime } from '../tts/earcons';
+import { speak, isSpeaking } from '../tts/speak';
 import { costFromUsage, estimateUtteranceCostUsd } from '../utils/cost';
+import { FeedbackAction, FeedbackMode, FeedbackPolicy, feedbackDedupKey } from './FeedbackPolicy';
 
 export type PipelineStatus = 'listening' | 'thinking' | 'speaking';
 
@@ -18,6 +20,10 @@ export interface FeedItem {
   hasError: boolean;
   errors: GrammarCheckResult['errors'];
   correctedSentence: string;
+  /** How this correction was delivered (speak / chime / log-only). */
+  deliveredAs?: FeedbackAction;
+  /** How many times this exact correction occurred before in the session. */
+  repeats?: number;
 }
 
 export interface SessionAggregates {
@@ -38,25 +44,45 @@ export interface PipelineCallbacks {
 }
 
 export interface PipelineSettings {
-  verbalFeedback: boolean;
+  feedbackMode: FeedbackMode;
   ttsRate: number;
   language: LanguageCode;
   model: string;
+  profile: SpeakerProfile;
 }
 
 const MAX_CONCURRENT_CHECKS = 2;
 const RATE_LIMIT_RETRIES = 3;
+/** In-session retries for utterances that failed on a network blip. */
+const NETWORK_RETRIES = 2;
+const NETWORK_RETRY_DELAY_MS = 4000;
 /** Extra gate time after TTS finishes, so the utterance tail isn't captured. */
 const TTS_GATE_TAIL_MS = 300;
+/** The conversational lull required before a correction is spoken. */
+const SILENCE_GAP_MS = 800;
+const FEEDBACK_TICK_MS = 250;
+
+interface PendingSpoken {
+  text: string;
+  enqueuedAt: number;
+  utteranceSeq: number;
+}
 
 export class SessionPipeline {
   private readonly capture = new AudioCapture();
   private readonly segmenter = new UtteranceSegmenter();
+  private policy: FeedbackPolicy;
   private sessionId: number | null = null;
   private running = false;
   private inFlight = 0;
   private queue: Utterance[] = [];
   private recentTranscripts: string[] = [];
+  private utteranceSeq = 0;
+  private latestProcessedSeq = 0;
+  private lastSpeechAt = 0;
+  private pendingSpoken: PendingSpoken | null = null;
+  private feedbackTimer: ReturnType<typeof setInterval> | null = null;
+  private delivering = false;
   private aggregates: SessionAggregates = {
     utteranceCount: 0,
     errorCount: 0,
@@ -70,11 +96,16 @@ export class SessionPipeline {
     private readonly getSettings: () => PipelineSettings,
     private readonly callbacks: PipelineCallbacks
   ) {
+    this.policy = new FeedbackPolicy({ mode: this.getSettings().feedbackMode });
     this.segmenter.onUtterance = (u) => this.enqueue(u);
   }
 
   get activeSessionId(): number | null {
     return this.sessionId;
+  }
+
+  getAggregates(): SessionAggregates {
+    return this.aggregates;
   }
 
   start(): number {
@@ -83,7 +114,13 @@ export class SessionPipeline {
     this.running = true;
     this.aggregates = { utteranceCount: 0, errorCount: 0, audioSeconds: 0, estCostUsd: 0 };
     this.recentTranscripts = [];
-    this.capture.start((frame) => this.segmenter.pushFrame(frame));
+    this.utteranceSeq = 0;
+    this.latestProcessedSeq = 0;
+    this.policy = new FeedbackPolicy({ mode: settings.feedbackMode });
+    this.capture.start((frame) => {
+      this.segmenter.pushFrame(frame);
+      if (this.segmenter.isSpeech) this.lastSpeechAt = Date.now();
+    });
     this.callbacks.onStatus('listening');
     return this.sessionId;
   }
@@ -93,6 +130,11 @@ export class SessionPipeline {
     this.running = false;
     this.capture.stop();
     this.segmenter.flush();
+    this.pendingSpoken = null;
+    if (this.feedbackTimer) {
+      clearInterval(this.feedbackTimer);
+      this.feedbackTimer = null;
+    }
     if (this.sessionId != null) {
       repo.endSession(this.db, this.sessionId, Date.now());
     }
@@ -111,6 +153,7 @@ export class SessionPipeline {
   private async process(utterance: Utterance): Promise<void> {
     if (this.sessionId == null) return;
     const sessionId = this.sessionId;
+    const seq = ++this.utteranceSeq;
     this.inFlight++;
     this.callbacks.onStatus('thinking');
 
@@ -126,6 +169,7 @@ export class SessionPipeline {
 
     try {
       const result = await this.checkWithRetry(wav);
+      this.latestProcessedSeq = Math.max(this.latestProcessedSeq, seq);
       repo.recordUtteranceResult(this.db, utteranceId, result);
 
       const costUsd = result.usage
@@ -148,22 +192,10 @@ export class SessionPipeline {
 
       if (result.speakerIsPrimary && result.transcript) {
         this.recentTranscripts = [...this.recentTranscripts.slice(-2), result.transcript];
-        this.callbacks.onFeedItem({
-          utteranceId,
-          ts: Date.now(),
-          transcript: result.transcript,
-          hasError: result.hasError,
-          errors: result.errors,
-          correctedSentence: result.correctedSentence,
-        });
-      }
-
-      if (result.hasError && result.feedbackUtterance && settings.verbalFeedback && this.running) {
-        await this.speakFeedback(result.feedbackUtterance, settings.ttsRate, settings.language);
+        this.handleFeedback(result, utteranceId, seq);
       }
     } catch (err) {
-      repo.markUtteranceStatus(this.db, utteranceId, 'error');
-      this.handleError(err);
+      this.handleError(err, utterance, utteranceId);
     } finally {
       this.inFlight--;
       if (this.running) this.callbacks.onStatus('listening');
@@ -172,13 +204,90 @@ export class SessionPipeline {
     }
   }
 
+  /** Decide and deliver feedback per the politeness policy. */
+  private handleFeedback(result: GrammarCheckResult, utteranceId: number, seq: number): void {
+    this.policy.setMode(this.getSettings().feedbackMode);
+
+    let deliveredAs: FeedbackAction | undefined;
+    let repeats: number | undefined;
+    if (result.hasError && result.errors.length > 0) {
+      const key = feedbackDedupKey(result.errors[0].errorType, result.errors[0].correctedFragment);
+      deliveredAs = this.policy.decide({
+        dedupKey: key,
+        utteranceSeq: seq,
+        latestSeq: this.latestProcessedSeq,
+        now: Date.now(),
+      });
+      repeats = Math.max(0, this.policy.repeatCount(key) - 1);
+
+      if (deliveredAs === 'speak' && result.feedbackUtterance) {
+        // Hold until a conversational lull; the tick loop delivers it.
+        // A newer pending correction replaces an older one.
+        this.pendingSpoken = { text: result.feedbackUtterance, enqueuedAt: Date.now(), utteranceSeq: seq };
+        this.ensureFeedbackTimer();
+      } else if (deliveredAs === 'chime') {
+        void this.playChimeGated();
+      }
+    }
+
+    this.callbacks.onFeedItem({
+      utteranceId,
+      ts: Date.now(),
+      transcript: result.transcript,
+      hasError: result.hasError,
+      errors: result.errors,
+      correctedSentence: result.correctedSentence,
+      deliveredAs,
+      repeats,
+    });
+  }
+
+  private ensureFeedbackTimer(): void {
+    if (this.feedbackTimer) return;
+    this.feedbackTimer = setInterval(() => void this.feedbackTick(), FEEDBACK_TICK_MS);
+  }
+
+  private async feedbackTick(): Promise<void> {
+    const pending = this.pendingSpoken;
+    if (!pending || !this.running) {
+      if (this.feedbackTimer && !pending) {
+        clearInterval(this.feedbackTimer);
+        this.feedbackTimer = null;
+      }
+      return;
+    }
+    const now = Date.now();
+    if (
+      this.policy.isExpired(pending.enqueuedAt, now) ||
+      this.policy.isStale(pending.utteranceSeq, this.latestProcessedSeq)
+    ) {
+      // Missed its window — the mistake is still in the log.
+      this.pendingSpoken = null;
+      return;
+    }
+    const inLull = !this.segmenter.isSpeech && now - this.lastSpeechAt >= SILENCE_GAP_MS;
+    if (!inLull || isSpeaking() || this.delivering) return;
+
+    this.pendingSpoken = null;
+    this.delivering = true;
+    try {
+      const settings = this.getSettings();
+      await this.speakGated(pending.text, settings.ttsRate, settings.language);
+      this.policy.recordSpoken(Date.now());
+    } finally {
+      this.delivering = false;
+    }
+  }
+
   private async checkWithRetry(wav: Uint8Array): Promise<GrammarCheckResult> {
     let attempt = 0;
     for (;;) {
       try {
+        const settings = this.getSettings();
         return await this.provider.checkUtterance(wav, {
-          language: this.getSettings().language,
+          language: settings.language,
           recentTranscripts: this.recentTranscripts,
+          profile: settings.profile,
         });
       } catch (err) {
         const rateLimited = err instanceof LlmError && err.kind === 'rate-limit';
@@ -190,7 +299,7 @@ export class SessionPipeline {
   }
 
   /** Gate the mic while TTS speaks so the app never corrects its own voice. */
-  private async speakFeedback(text: string, rate: number, language: LanguageCode): Promise<void> {
+  private async speakGated(text: string, rate: number, language: LanguageCode): Promise<void> {
     this.segmenter.setGated(true);
     this.callbacks.onStatus('speaking');
     try {
@@ -198,23 +307,49 @@ export class SessionPipeline {
       await delay(TTS_GATE_TAIL_MS);
     } finally {
       this.segmenter.setGated(false);
+      if (this.running) this.callbacks.onStatus('listening');
     }
   }
 
-  private handleError(err: unknown): void {
+  private async playChimeGated(): Promise<void> {
+    this.segmenter.setGated(true);
+    try {
+      await playCorrectionChime();
+    } finally {
+      this.segmenter.setGated(false);
+    }
+  }
+
+  private handleError(err: unknown, utterance: Utterance, utteranceId: number): void {
     if (err instanceof LlmError && err.kind === 'auth') {
+      repo.markUtteranceStatus(this.db, utteranceId, 'error');
       this.stop();
       this.callbacks.onFatalError(
         'Your API key was rejected. Check it in Settings, then start a new session.'
       );
       return;
     }
-    const message =
-      err instanceof LlmError && err.kind === 'network'
-        ? 'Offline — this utterance was skipped.'
-        : err instanceof LlmError && err.kind === 'rate-limit'
-          ? 'Rate limited by Gemini — an utterance was skipped.'
-          : 'One utterance could not be checked.';
+
+    const isNetwork = err instanceof LlmError && err.kind === 'network';
+    const retries = (utterance as Utterance & { retries?: number }).retries ?? 0;
+    if (isNetwork && retries < NETWORK_RETRIES) {
+      // Audio is still in memory during the session — retry the utterance
+      // instead of silently losing it. (Nothing is persisted to disk.)
+      repo.markUtteranceStatus(this.db, utteranceId, 'dropped');
+      const retryUtterance = Object.assign(utterance, { retries: retries + 1 });
+      setTimeout(() => {
+        if (this.running) this.enqueue(retryUtterance);
+      }, NETWORK_RETRY_DELAY_MS);
+      this.callbacks.onTransientError('Offline — retrying the last utterance…');
+      return;
+    }
+
+    repo.markUtteranceStatus(this.db, utteranceId, 'error');
+    const message = isNetwork
+      ? 'Offline — an utterance was skipped.'
+      : err instanceof LlmError && err.kind === 'rate-limit'
+        ? 'Rate limited by Gemini — an utterance was skipped.'
+        : 'One utterance could not be checked.';
     this.callbacks.onTransientError(message);
   }
 }

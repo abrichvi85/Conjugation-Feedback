@@ -3,6 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 import { LanguageCode } from '../languages/types';
+import { SpeakerGender, SpeakerLevel } from '../llm/types';
+import { FeedbackMode } from '../pipeline/FeedbackPolicy';
 import { DEFAULT_MODEL } from '../utils/cost';
 
 const SECURE_KEY_API = 'gemini_api_key';
@@ -19,31 +21,41 @@ export const TTS_RATES: Record<TtsRatePreset, number> = {
 interface SettingsState {
   hydrated: boolean;
   apiKey: string | null;
-  verbalFeedback: boolean;
+  feedbackMode: FeedbackMode;
   language: LanguageCode;
   model: string;
   ttsRate: TtsRatePreset;
+  gender: SpeakerGender;
+  level: SpeakerLevel;
   hydrate: () => Promise<void>;
   setApiKey: (key: string | null) => Promise<void>;
-  setVerbalFeedback: (on: boolean) => void;
+  setFeedbackMode: (mode: FeedbackMode) => void;
   setLanguage: (language: LanguageCode) => void;
   setModel: (model: string) => void;
   setTtsRate: (rate: TtsRatePreset) => void;
+  setGender: (gender: SpeakerGender) => void;
+  setLevel: (level: SpeakerLevel) => void;
 }
 
 interface PersistedPrefs {
-  verbalFeedback: boolean;
+  feedbackMode: FeedbackMode;
   language: LanguageCode;
   model: string;
   ttsRate: TtsRatePreset;
+  gender: SpeakerGender;
+  level: SpeakerLevel;
+  /** Pre-feedbackMode versions persisted this boolean. */
+  verbalFeedback?: boolean;
 }
 
 async function persistPrefs(state: SettingsState): Promise<void> {
   const prefs: PersistedPrefs = {
-    verbalFeedback: state.verbalFeedback,
+    feedbackMode: state.feedbackMode,
     language: state.language,
     model: state.model,
     ttsRate: state.ttsRate,
+    gender: state.gender,
+    level: state.level,
   };
   await AsyncStorage.setItem(STORAGE_KEY_PREFS, JSON.stringify(prefs));
 }
@@ -51,10 +63,12 @@ async function persistPrefs(state: SettingsState): Promise<void> {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   hydrated: false,
   apiKey: null,
-  verbalFeedback: true, // product default: correct me out loud
+  feedbackMode: 'voice', // product default: correct me out loud
   language: 'pl',
   model: DEFAULT_MODEL,
   ttsRate: 'normal',
+  gender: 'unspecified',
+  level: 'intermediate',
 
   hydrate: async () => {
     if (get().hydrated) return;
@@ -70,13 +84,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         // corrupted prefs: fall back to defaults
       }
     }
+    const migratedMode: FeedbackMode =
+      prefs.feedbackMode ?? (prefs.verbalFeedback === false ? 'off' : 'voice');
     set({
       hydrated: true,
       apiKey: apiKey ?? null,
-      verbalFeedback: prefs.verbalFeedback ?? true,
+      feedbackMode: migratedMode,
       language: prefs.language ?? 'pl',
       model: prefs.model ?? DEFAULT_MODEL,
       ttsRate: prefs.ttsRate ?? 'normal',
+      gender: prefs.gender ?? 'unspecified',
+      level: prefs.level ?? 'intermediate',
     });
   },
 
@@ -89,8 +107,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ apiKey: key });
   },
 
-  setVerbalFeedback: (on) => {
-    set({ verbalFeedback: on });
+  setFeedbackMode: (feedbackMode) => {
+    set({ feedbackMode });
     void persistPrefs(get());
   },
 
@@ -106,6 +124,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setTtsRate: (ttsRate) => {
     set({ ttsRate });
+    void persistPrefs(get());
+  },
+
+  setGender: (gender) => {
+    set({ gender });
+    void persistPrefs(get());
+  },
+
+  setLevel: (level) => {
+    set({ level });
     void persistPrefs(get());
   },
 }));

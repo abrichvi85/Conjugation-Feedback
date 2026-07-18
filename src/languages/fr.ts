@@ -14,6 +14,7 @@ STRICT RULES — read carefully:
 - corrected_sentence: the learner's full sentence with all corrections applied (or the transcript unchanged if no errors).
 - feedback_utterance: a SHORT spoken correction in French, maximum 8 words, pattern "On dit : <corrected fragment>." Empty string when has_error=false.
 - explanation_short: one short English sentence naming the rule (e.g. "'Aller' takes 'être' in the passé composé.").
+- vocabulary_gaps: when the learner switched to another language mid-sentence or clearly talked around a missing word (e.g. "le... comment dire... deadline"), record it: native_fragment = what they said, intended_meaning = what they meant (in English), target_suggestion = the natural French word/phrase (e.g. "la date limite"). A gap is NOT an error — never put it in errors, and it alone must not set has_error=true. Empty list when there are none.
 - Use the provided recent utterances for context (e.g. the speaker's gender for agreement) — but only correct the CURRENT utterance.
 
 EXAMPLES (transcript → verdict):
@@ -35,4 +36,5 @@ export const french: LanguagePack = {
   systemPrompt: SYSTEM_PROMPT,
   ttsLocale: 'fr-FR',
   feedbackPatternExample: 'On dit : …',
+  trySentence: "J'ai allé au cinéma hier.",
 };

@@ -2,19 +2,46 @@ import { Link, useFocusEffect } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 
+import { ProgressHeader } from '@/components/ProgressHeader';
 import { getDatabase } from '@/db/database';
-import { SessionRow, listSessions } from '@/db/repo';
+import {
+  ErrorTypeCount,
+  RecurringMistake,
+  SessionRow,
+  SpeakingTotals,
+  VocabGapView,
+  getErrorTypeCounts,
+  getSpeakingTotals,
+  getTopRecurringMistakes,
+  listRecentVocabGaps,
+  listSessions,
+} from '@/db/repo';
 import { LANGUAGE_PACKS } from '@/languages/registry';
 import { LanguageCode } from '@/languages/types';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import { formatUsd } from '@/utils/cost';
 
+const WEEK_MS = 7 * 24 * 3600_000;
+const MONTH_MS = 30 * 24 * 3600_000;
+
 export default function HistoryScreen() {
+  const language = useSettingsStore((s) => s.language);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [totals, setTotals] = useState<SpeakingTotals | null>(null);
+  const [errorTypes, setErrorTypes] = useState<ErrorTypeCount[]>([]);
+  const [recurring, setRecurring] = useState<RecurringMistake[]>([]);
+  const [vocabGaps, setVocabGaps] = useState<VocabGapView[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      setSessions(listSessions(getDatabase()));
-    }, [])
+      const db = getDatabase();
+      const now = Date.now();
+      setSessions(listSessions(db));
+      setTotals(getSpeakingTotals(db, language, now - WEEK_MS));
+      setErrorTypes(getErrorTypeCounts(db, language, now - MONTH_MS));
+      setRecurring(getTopRecurringMistakes(db, language, 5));
+      setVocabGaps(listRecentVocabGaps(db, language, 5));
+    }, [language])
   );
 
   return (
@@ -22,6 +49,16 @@ export default function HistoryScreen() {
       style={styles.container}
       data={sessions}
       keyExtractor={(s) => String(s.id)}
+      ListHeaderComponent={
+        totals && totals.session_count > 0 ? (
+          <ProgressHeader
+            totals={totals}
+            errorTypes={errorTypes}
+            recurring={recurring}
+            vocabGaps={vocabGaps}
+          />
+        ) : null
+      }
       renderItem={({ item }) => <SessionListItem session={item} />}
       ListEmptyComponent={<Text style={styles.empty}>No sessions yet.</Text>}
     />

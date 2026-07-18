@@ -8,9 +8,11 @@ interface Props {
   hasError: boolean;
   errors: GrammarError[];
   correctedSentence: string;
+  /** Prior occurrences of this exact correction in the session. */
+  repeats?: number;
 }
 
-export function CorrectionCard({ transcript, hasError, errors, correctedSentence }: Props) {
+export function CorrectionCard({ transcript, hasError, errors, correctedSentence, repeats }: Props) {
   if (!hasError) {
     return (
       <View style={[styles.card, styles.okCard]}>
@@ -24,6 +26,9 @@ export function CorrectionCard({ transcript, hasError, errors, correctedSentence
 
   return (
     <View style={[styles.card, styles.errorCard]}>
+      {repeats != null && repeats > 0 && (
+        <Text style={styles.repeatBadge}>again ×{repeats + 1}</Text>
+      )}
       <Text style={styles.transcript}>{transcript}</Text>
       <Text style={styles.corrected}>{correctedSentence}</Text>
       {errors.map((e, i) => (
@@ -57,6 +62,14 @@ const styles = StyleSheet.create({
   okMark: { color: '#34C759', fontSize: 16, fontWeight: '700' },
   transcriptOk: { flex: 1, fontSize: 14, color: '#3C3C43' },
   errorCard: { borderLeftWidth: 3, borderLeftColor: '#FF9500' },
+  repeatBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 12,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FF9500',
+  },
   transcript: { fontSize: 14, color: '#8E8E93' },
   corrected: { fontSize: 16, fontWeight: '600', color: '#1C1C1E', marginTop: 4 },
   errorRow: { marginTop: 8 },

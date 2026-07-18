@@ -16,12 +16,14 @@ describe('language packs', () => {
       expect(pack.displayName.length).toBeGreaterThan(0);
       expect(pack.flag.length).toBeGreaterThan(0);
       expect(pack.ttsLocale).toMatch(/^[a-z]{2}-[A-Z]{2}$/);
+      expect(pack.trySentence.length).toBeGreaterThan(0);
       expect(pack.systemPrompt.length).toBeGreaterThan(500);
 
       // Load-bearing contract strings every prompt must reference: the
       // bystander rule, the renamed feedback field, and precision bias.
       expect(pack.systemPrompt).toContain('speaker_is_primary');
       expect(pack.systemPrompt).toContain('feedback_utterance');
+      expect(pack.systemPrompt).toContain('vocabulary_gaps');
       expect(pack.systemPrompt).not.toContain('feedback_utterance_pl');
       expect(pack.systemPrompt).toContain('has_error=false');
       expect(pack.systemPrompt).toContain('corrected_sentence');

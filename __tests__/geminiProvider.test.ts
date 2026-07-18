@@ -14,6 +14,7 @@ const WIRE_OK = {
       explanation_short: "First person singular of 'chcieć' is 'chcę'.",
     },
   ],
+  vocabulary_gaps: [],
   corrected_sentence: 'Ja chcę kupić bilet.',
   feedback_utterance: 'Mówi się: chcę kupić.',
 };
@@ -113,6 +114,26 @@ describe('GeminiProvider', () => {
     const provider = new GeminiProvider({ getApiKey: async () => null }, 'gemini-3.1-flash-lite');
     await expect(provider.checkUtterance(WAV, CTX)).rejects.toMatchObject({ kind: 'auth' });
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('checks drill attempts against a target sentence', async () => {
+    mockFetchOnce(
+      200,
+      geminiResponse(
+        JSON.stringify({ transcript: 'Szukam mojego telefonu.', correct: true, feedback_short: 'Nice!' })
+      )
+    );
+    const provider = new GeminiProvider(CREDS, 'gemini-3.1-flash-lite');
+    const result = await provider.checkDrillAttempt(WAV, 'Szukam mojego telefonu.', 'pl');
+    expect(result).toEqual({
+      transcript: 'Szukam mojego telefonu.',
+      correct: true,
+      feedbackShort: 'Nice!',
+    });
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.contents[0].parts[0].text).toContain('Szukam mojego telefonu.');
+    expect(body.generationConfig.responseSchema.required).toContain('correct');
   });
 
   it('wraps fetch failures as network errors', async () => {

@@ -37,16 +37,19 @@ const RESULT_WITH_ERROR: GrammarCheckResult = {
       explanationShort: "'Szukać' takes the genitive case.",
     },
   ],
+  vocabularyGaps: [
+    { nativeFragment: 'no i ten... deadline', intendedMeaning: 'deadline', targetSuggestion: 'termin' },
+  ],
   correctedSentence: 'Szukam mojego telefonu.',
   feedbackUtterance: 'Mówi się: szukam mojego telefonu.',
 };
 
 describe('migrations', () => {
-  it('are idempotent', () => {
+  it('are idempotent and reach the latest version', () => {
     const db = openTestDb();
     expect(() => runMigrations(db)).not.toThrow();
     expect(db.getFirstSync<{ user_version: number }>('PRAGMA user_version', [])?.user_version).toBe(
-      1
+      2
     );
   });
 });
@@ -111,5 +114,85 @@ describe('repo', () => {
     const [mistake] = repo.listMistakesForSession(db, sessionId);
     repo.flagErrorWrong(db, mistake.id, true);
     expect(repo.listMistakesForSession(db, sessionId)[0].flagged_wrong).toBe(1);
+  });
+
+  it('stores and lists vocabulary gaps per language', () => {
+    const db = openTestDb();
+    const plSession = repo.createSession(db, 1000, 'pl', 'm');
+    const utteranceId = repo.insertPendingUtterance(db, plSession, 2000, 1500);
+    repo.recordUtteranceResult(db, utteranceId, RESULT_WITH_ERROR);
+
+    const gaps = repo.listRecentVocabGaps(db, 'pl', 10);
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toMatchObject({
+      native_fragment: 'no i ten... deadline',
+      target_suggestion: 'termin',
+      language: 'pl',
+    });
+    expect(repo.listRecentVocabGaps(db, 'es', 10)).toHaveLength(0);
+  });
+});
+
+describe('progress stats', () => {
+  function seed(db: ReturnType<typeof openTestDb>) {
+    const s1 = repo.createSession(db, 1000, 'pl', 'm');
+    const u1 = repo.insertPendingUtterance(db, s1, 2000, 4000);
+    repo.recordUtteranceResult(db, u1, RESULT_WITH_ERROR);
+    repo.addSessionAggregates(db, s1, { utterances: 1, errors: 1, audioSeconds: 60 });
+
+    const s2 = repo.createSession(db, 500_000, 'pl', 'm');
+    const u2 = repo.insertPendingUtterance(db, s2, 500_100, 3000);
+    repo.recordUtteranceResult(db, u2, RESULT_WITH_ERROR); // same mistake again
+    const u3 = repo.insertPendingUtterance(db, s2, 500_200, 3000);
+    repo.recordUtteranceResult(db, u3, {
+      ...RESULT_WITH_ERROR,
+      errors: [
+        {
+          erroneousFragment: 'chcieć',
+          correctedFragment: 'chcę',
+          errorType: 'conjugation',
+          explanationShort: 'First person singular.',
+        },
+      ],
+      vocabularyGaps: [],
+    });
+    repo.addSessionAggregates(db, s2, { utterances: 2, errors: 2, audioSeconds: 120 });
+    return { s1, s2 };
+  }
+
+  it('computes speaking totals with a week window', () => {
+    const db = openTestDb();
+    seed(db);
+    const totals = repo.getSpeakingTotals(db, 'pl', 400_000);
+    expect(totals.total_audio_seconds).toBeCloseTo(180);
+    expect(totals.week_audio_seconds).toBeCloseTo(120);
+    expect(totals.session_count).toBe(2);
+    expect(totals.error_count).toBe(3);
+  });
+
+  it('breaks down error types and excludes flagged-wrong corrections', () => {
+    const db = openTestDb();
+    seed(db);
+    let counts = repo.getErrorTypeCounts(db, 'pl', 0);
+    expect(counts).toEqual([
+      { error_type: 'case', n: 2 },
+      { error_type: 'conjugation', n: 1 },
+    ]);
+
+    const [first] = repo.listMistakesForSession(db, 1);
+    repo.flagErrorWrong(db, first.id, true);
+    counts = repo.getErrorTypeCounts(db, 'pl', 0);
+    expect(counts.find((c) => c.error_type === 'case')?.n).toBe(1);
+  });
+
+  it('ranks recurring mistakes and dedupes drill items by correction', () => {
+    const db = openTestDb();
+    seed(db);
+    const top = repo.getTopRecurringMistakes(db, 'pl', 5);
+    expect(top[0]).toMatchObject({ corrected_fragment: 'mojego telefonu', n: 2 });
+
+    const drills = repo.listDrillItems(db, 'pl', 5);
+    expect(drills).toHaveLength(2); // deduped by corrected fragment
+    expect(drills[0].ts).toBeGreaterThanOrEqual(drills[1].ts); // latest first
   });
 });

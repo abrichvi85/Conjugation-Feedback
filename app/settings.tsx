@@ -4,7 +4,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -13,6 +12,8 @@ import {
 import { ALL_LANGUAGES } from '@/languages/registry';
 import { LanguageCode } from '@/languages/types';
 import { createProvider } from '@/llm/providerRegistry';
+import { SpeakerGender, SpeakerLevel } from '@/llm/types';
+import { FeedbackMode } from '@/pipeline/FeedbackPolicy';
 import { useSessionStore } from '@/store/useSessionStore';
 import { TtsRatePreset, settingsCredentials, useSettingsStore } from '@/store/useSettingsStore';
 import { MODEL_PRICING } from '@/utils/cost';
@@ -73,12 +74,19 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="Feedback">
-        <Row label="Speak corrections aloud">
-          <Switch value={settings.verbalFeedback} onValueChange={settings.setVerbalFeedback} />
-        </Row>
+        <SegmentedControl<FeedbackMode>
+          options={[
+            { value: 'voice', label: '🗣 Voice' },
+            { value: 'chime', label: '🔔 Chime' },
+            { value: 'off', label: '🤫 Silent' },
+          ]}
+          value={settings.feedbackMode}
+          onChange={settings.setFeedbackMode}
+        />
         <Text style={styles.hint}>
-          When on, corrections are spoken into your AirPods immediately. Mistakes are always saved
-          to History either way.
+          Voice speaks corrections in a conversational lull (max 6 per 10 min, repeats muted).
+          Chime plays a soft tone instead — check History later. Silent just logs. Mistakes are
+          always saved either way.
         </Text>
         <Row label="Voice speed">
           <SegmentedControl<TtsRatePreset>
@@ -91,6 +99,39 @@ export default function SettingsScreen() {
             onChange={settings.setTtsRate}
           />
         </Row>
+      </Section>
+
+      <Section title="About you">
+        <Row label="I speak as">
+          <SegmentedControl<SpeakerGender>
+            options={[
+              { value: 'unspecified', label: 'Skip' },
+              { value: 'female', label: 'Female' },
+              { value: 'male', label: 'Male' },
+            ]}
+            value={settings.gender}
+            onChange={settings.setGender}
+          />
+        </Row>
+        <Text style={styles.hint}>
+          Grammatical gender only — some languages (like Polish past tense) conjugate differently.
+          Setting it beats guessing from your voice.
+        </Text>
+        <Row label="Level">
+          <SegmentedControl<SpeakerLevel>
+            options={[
+              { value: 'beginner', label: 'Beginner' },
+              { value: 'intermediate', label: 'Middle' },
+              { value: 'advanced', label: 'Advanced' },
+            ]}
+            value={settings.level}
+            onChange={settings.setLevel}
+          />
+        </Row>
+        <Text style={styles.hint}>
+          Beginners get only high-value corrections in simple English; advanced learners get
+          stricter checking with explanations in the target language.
+        </Text>
       </Section>
 
       <Section title="Model">
@@ -122,6 +163,15 @@ export default function SettingsScreen() {
           {sessionActive
             ? 'End the current session to switch languages.'
             : 'Corrections and spoken feedback follow the selected language.'}
+        </Text>
+      </Section>
+
+      <Section title="Privacy">
+        <Text style={styles.hint}>
+          Audio is streamed to Google Gemini only while you are actually speaking (silence never
+          leaves the phone), then discarded — no audio is recorded or stored anywhere. History
+          keeps text only. Your API key is stored in the device secure enclave and never leaves
+          this device.
         </Text>
       </Section>
     </ScrollView>
@@ -214,6 +264,7 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 15, color: '#1C1C1E', flexShrink: 1, marginRight: 12 },
   disabled: { opacity: 0.5 },
   segments: {
+    flex: 1,
     flexDirection: 'row',
     backgroundColor: '#E5E5EA',
     borderRadius: 8,

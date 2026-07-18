@@ -14,6 +14,7 @@ STRICT RULES — read carefully:
 - corrected_sentence: the learner's full sentence with all corrections applied (or the transcript unchanged if no errors).
 - feedback_utterance: a SHORT spoken correction in English, maximum 8 words, pattern "We say: <corrected fragment>." Empty string when has_error=false.
 - explanation_short: one short English sentence naming the rule (e.g. "Third person singular takes -s.").
+- vocabulary_gaps: when the learner used a word from their native language mid-sentence or clearly talked around a missing word (e.g. "the... thing you boil water in"), record it: native_fragment = what they said, intended_meaning = what they meant, target_suggestion = the natural English word/phrase (e.g. "kettle"). A gap is NOT an error — never put it in errors, and it alone must not set has_error=true. Empty list when there are none.
 - Use the provided recent utterances for context — but only correct the CURRENT utterance.
 
 EXAMPLES (transcript → verdict):
@@ -35,4 +36,5 @@ export const english: LanguagePack = {
   systemPrompt: SYSTEM_PROMPT,
   ttsLocale: 'en-US',
   feedbackPatternExample: 'We say: …',
+  trySentence: 'She have three brothers.',
 };

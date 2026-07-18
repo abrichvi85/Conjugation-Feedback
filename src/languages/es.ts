@@ -14,6 +14,7 @@ STRICT RULES — read carefully:
 - corrected_sentence: the learner's full sentence with all corrections applied (or the transcript unchanged if no errors).
 - feedback_utterance: a SHORT spoken correction in Spanish, maximum 8 words, pattern "Se dice: <corrected fragment>." Empty string when has_error=false.
 - explanation_short: one short English sentence naming the rule (e.g. "Use 'estar' for locations.").
+- vocabulary_gaps: when the learner switched to another language mid-sentence or clearly talked around a missing word (e.g. "eh... como se dice... deadline"), record it: native_fragment = what they said, intended_meaning = what they meant (in English), target_suggestion = the natural Spanish word/phrase (e.g. "fecha límite"). A gap is NOT an error — never put it in errors, and it alone must not set has_error=true. Empty list when there are none.
 - Use the provided recent utterances for context (e.g. the speaker's gender for adjective agreement) — but only correct the CURRENT utterance.
 
 EXAMPLES (transcript → verdict):
@@ -35,4 +36,5 @@ export const spanish: LanguagePack = {
   systemPrompt: SYSTEM_PROMPT,
   ttsLocale: 'es-ES',
   feedbackPatternExample: 'Se dice: …',
+  trySentence: 'Yo querer comprar un billete.',
 };

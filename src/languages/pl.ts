@@ -14,6 +14,7 @@ STRICT RULES — read carefully:
 - corrected_sentence: the learner's full sentence with all corrections applied (or the transcript unchanged if no errors).
 - feedback_utterance: a SHORT spoken correction in Polish, maximum 8 words, pattern "Mówi się: <corrected fragment>." Empty string when has_error=false.
 - explanation_short: one short English sentence naming the rule (e.g. "After 'szukać' use the genitive case.").
+- vocabulary_gaps: when the learner switched to another language mid-sentence or clearly talked around a missing word (e.g. "no i ten... deadline"), record it: native_fragment = what they said, intended_meaning = what they meant (in English), target_suggestion = the natural Polish word/phrase (e.g. "termin"). A gap is NOT an error — never put it in errors, and it alone must not set has_error=true. Empty list when there are none.
 - Use the provided recent utterances for context (e.g. the speaker's gender for past-tense forms) — but only correct the CURRENT utterance.
 
 EXAMPLES (transcript → verdict):
@@ -34,4 +35,5 @@ export const polish: LanguagePack = {
   systemPrompt: SYSTEM_PROMPT,
   ttsLocale: 'pl-PL',
   feedbackPatternExample: 'Mówi się: …',
+  trySentence: 'Szukam mój telefon.',
 };

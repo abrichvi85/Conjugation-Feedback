@@ -1,9 +1,16 @@
 import { getLanguagePack } from '../languages/registry';
+import { LanguageCode } from '../languages/types';
 import { base64Encode } from '../utils/base64';
 import { buildUserContextText } from './prompt';
-import { geminiResponseSchema, parseGrammarCheckResponse } from './schema';
+import {
+  geminiDrillResponseSchema,
+  geminiResponseSchema,
+  parseDrillResponse,
+  parseGrammarCheckResponse,
+} from './schema';
 import {
   CredentialsSource,
+  DrillCheckResult,
   GrammarCheckContext,
   GrammarCheckResult,
   LlmError,
@@ -62,6 +69,45 @@ export class GeminiProvider implements LlmProvider {
       }
     }
     throw new LlmError('bad-response', `Model returned invalid JSON: ${String(lastParseError)}`);
+  }
+
+  async checkDrillAttempt(
+    wav: Uint8Array,
+    target: string,
+    language: LanguageCode
+  ): Promise<DrillCheckResult> {
+    const pack = getLanguagePack(language);
+    const body = {
+      systemInstruction: {
+        parts: [
+          {
+            text: `You are a ${pack.displayName} pronunciation-agnostic grammar drill checker. The learner was asked to say a target sentence. Transcribe the attached audio and judge ONLY whether the grammar of the target was reproduced correctly: accept minor pronunciation issues, fillers, hesitations, and small wording differences that keep the grammar of the target intact. Reject attempts that reproduce the original grammatical mistake or introduce a new one in the target fragment. feedback_short: one short encouraging English sentence. Respond ONLY with the JSON object.`,
+          },
+        ],
+      },
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: `Target sentence: "${target}"` },
+            { inlineData: { mimeType: 'audio/wav', data: base64Encode(wav) } },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: geminiDrillResponseSchema,
+        temperature: 0.1,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    };
+
+    const json = await this.post(`models/${this.model}:generateContent`, body);
+    try {
+      return parseDrillResponse(extractText(json));
+    } catch (err) {
+      throw new LlmError('bad-response', `Model returned invalid drill JSON: ${String(err)}`);
+    }
   }
 
   async testConnection(): Promise<void> {

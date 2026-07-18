@@ -12,6 +12,17 @@ architecture keeps more languages, other LLM providers, and a future
 backend/OAuth path open. Runs on iOS and Android, with background listening on
 both (iOS background audio; Android foreground service).
 
+The coach is deliberately **polite**: spoken corrections wait for a
+conversational lull, identical repeats are muted (logged with an "again ×N"
+counter), at most 6 corrections are spoken per 10 minutes (then it downgrades
+to a soft chime), and corrections that miss their moment are logged instead of
+spoken late. A chime-only and a silent mode exist for low-interruption use.
+Beyond the live session: a **Practice tab** drills you on your own recent
+mistakes, **History** shows your grammar fingerprint (real minutes spoken,
+error-type trends, recurring mistakes) plus **vocabulary gaps** — words you
+were missing mid-conversation, mined automatically when you circumlocute or
+code-switch.
+
 ## How it works
 
 ```
@@ -45,8 +56,8 @@ Key design decisions:
 ## Repo layout
 
 ```
-app/                 expo-router screens: Session | History | Settings
-src/audio/           capture, energy VAD, utterance segmenter, WAV codec
+app/                 expo-router screens: Session | Practice | History | Settings
+src/audio/           capture, energy VAD, utterance segmenter, WAV codec, one-shot drill capture
 src/llm/             provider interface, GeminiProvider, prompt, response schema
 src/pipeline/        SessionPipeline — orchestrates capture → check → speak → persist
 src/db/              expo-sqlite schema/migrations/repo (node-testable)

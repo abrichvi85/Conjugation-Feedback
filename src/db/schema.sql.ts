@@ -42,4 +42,15 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX idx_utterances_session ON utterances(session_id);
   CREATE INDEX idx_errors_utterance ON errors(utterance_id);
   `,
+  `
+  CREATE TABLE vocab_gaps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    utterance_id INTEGER NOT NULL REFERENCES utterances(id) ON DELETE CASCADE,
+    native_fragment TEXT NOT NULL,
+    intended_meaning TEXT NOT NULL,
+    target_suggestion TEXT NOT NULL
+  );
+
+  CREATE INDEX idx_vocab_utterance ON vocab_gaps(utterance_id);
+  `,
 ];

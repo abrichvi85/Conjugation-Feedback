@@ -19,4 +19,9 @@ export interface LanguagePack {
   ttsLocale: string;
   /** The spoken-correction pattern the prompt mandates, e.g. "Mówi się: …". */
   feedbackPatternExample: string;
+  /**
+   * A short sentence with a deliberate mistake, shown during onboarding so the
+   * user's very first correction is guaranteed and instant.
+   */
+  trySentence: string;
 }

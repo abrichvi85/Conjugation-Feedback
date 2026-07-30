@@ -1,0 +1,62 @@
+name: iOS Build (compile check)
+
+# Compiles the full native iOS app (expo prebuild + xcodebuild) unsigned for
+# the iOS Simulator. No Apple credentials needed — this proves the native
+# modules, config plugins, and New Architecture build cleanly. It does NOT
+# produce an installable IPA (that requires signing; see eas-build.yml).
+#
+# Triggers only when the native surface changes — macOS runner minutes are
+# expensive (10x multiplier on private repos).
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - package.json
+      - package-lock.json
+      - app.json
+      - .npmrc
+      - '.github/workflows/ios-build.yml'
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios-simulator:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate native iOS project (expo prebuild)
+        run: npx expo prebuild --platform ios --no-install
+        env:
+          CI: '1'
+
+      - name: Install CocoaPods
+        run: pod install --project-directory=ios
+
+      - name: Compile for iOS Simulator (unsigned)
+        run: |
+          set -o pipefail
+          WORKSPACE=$(find ios -maxdepth 1 -name '*.xcworkspace' | head -n 1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          echo "Building scheme $SCHEME from $WORKSPACE"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build | tail -n 200

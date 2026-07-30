@@ -1,0 +1,44 @@
+name: EAS iOS Build (signed, manual)
+
+# Kicks off a signed, installable iOS build on Expo's build service.
+# Manual-only, and requires one-time setup that CI cannot do for you:
+#   1. Locally: `eas login && eas init` (commits owner/projectId to app.json)
+#   2. Locally: run `eas build --platform ios --profile preview` ONCE
+#      interactively so EAS stores your Apple signing credentials.
+#   3. Repo settings -> Secrets -> Actions: add EXPO_TOKEN
+#      (create at https://expo.dev/accounts/[account]/settings/access-tokens)
+# After that, this workflow queues cloud builds non-interactively; the
+# install URL/QR appears on your expo.dev builds page.
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile'
+        type: choice
+        default: preview
+        options: [preview, development, production]
+
+jobs:
+  eas-build-ios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Queue iOS build on EAS
+        run: eas build --platform ios --profile ${{ inputs.profile }} --non-interactive --no-wait

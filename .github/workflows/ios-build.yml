@@ -42,12 +42,16 @@ jobs:
         env:
           CI: '1'
 
+      - name: Point Xcode script phases at the runner's node
+        # Xcode sanitizes PATH inside build script phases; RN/Expo scripts
+        # resolve node via ios/.xcode.env.local when present.
+        run: echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
+
       - name: Install CocoaPods
         run: pod install --project-directory=ios
 
       - name: Compile for iOS Simulator (unsigned)
         run: |
-          set -o pipefail
           WORKSPACE=$(find ios -maxdepth 1 -name '*.xcworkspace' | head -n 1)
           SCHEME=$(basename "$WORKSPACE" .xcworkspace)
           echo "Building scheme $SCHEME from $WORKSPACE"
@@ -59,4 +63,4 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            build | tail -n 200
+            build 2>&1
